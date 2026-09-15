@@ -6,6 +6,7 @@
 <title>Portfolio — Projects</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
 <script type="importmap">
 {
   "imports": {
@@ -15,28 +16,8 @@
 }
 </script>
 <style>
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Space Grotesk',sans-serif;background:#06080f;color:#e2e8f0;overflow-x:hidden;min-height:100vh}
-
-.loader{position:fixed;inset:0;background:#06080f;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99;transition:opacity .6s,visibility .6s;gap:1rem}
-.loader.off{opacity:0;visibility:hidden;pointer-events:none}
-.loader-spin{width:40px;height:40px;border:3px solid #1e2740;border-top-color:#6366f1;border-radius:50%;animation:sp .7s linear infinite}
-.loader-text{color:#8892a8;font-size:.85rem}
-@keyframes sp{to{transform:rotate(360deg)}}
-
+/* ---- Portfolio-specific styles (shared.css provides base) ---- */
 #bg{position:fixed;inset:0;z-index:0}
-
-nav{position:fixed;top:0;left:0;right:0;z-index:10;padding:1.2rem 2.5rem;display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(18px);background:rgba(6,8,15,.7);border-bottom:1px solid rgba(30,39,64,.35)}
-.nl{font-weight:700;font-size:1.2rem;letter-spacing:-.5px}.nl span{color:#6366f1}
-.nk{display:flex;gap:1.5rem;align-items:center}
-.nk a{color:#8892a8;text-decoration:none;font-size:.85rem;font-weight:500;transition:color .3s}
-.nk a:hover{color:#e2e8f0}
-
-/* Lang toggle */
-.lang-toggle{display:flex;background:rgba(30,39,64,.5);border-radius:8px;border:1px solid rgba(99,102,241,.15);overflow:hidden;cursor:pointer}
-.lang-btn{padding:.35rem .7rem;font-size:.75rem;font-weight:600;font-family:'Space Grotesk',sans-serif;border:none;background:transparent;color:#8892a8;cursor:pointer;transition:all .25s;letter-spacing:.5px}
-.lang-btn.active{background:rgba(99,102,241,.2);color:#a5b4fc}
-.lang-btn:hover:not(.active){color:#c4c9d4}
 
 .hero{position:relative;z-index:1;padding:10rem 2rem 4rem;text-align:center}
 .hero h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:700;letter-spacing:-2px;line-height:1.1;margin-bottom:1rem}
@@ -58,19 +39,14 @@ nav{position:fixed;top:0;left:0;right:0;z-index:10;padding:1.2rem 2.5rem;display
 .card-subtitle{color:#8892a8;font-size:.85rem;margin-bottom:1rem}
 .card-desc{color:#a0a8b8;font-size:.9rem;line-height:1.65;margin-bottom:1.4rem}
 .card-tags{display:flex;flex-wrap:wrap;gap:.5rem}
-.tag{font-size:.7rem;font-weight:600;padding:.3rem .7rem;border-radius:6px;background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.15);letter-spacing:.3px}
 .card-arrow{position:absolute;top:1.5rem;right:1.5rem;width:32px;height:32px;border-radius:8px;background:rgba(99,102,241,.08);display:flex;align-items:center;justify-content:center;transition:background .3s,transform .3s}
 .card:hover .card-arrow{background:var(--accent);transform:translate(2px,-2px)}
 .card-arrow svg{width:16px;height:16px;stroke:#8892a8;transition:stroke .3s}
 .card:hover .card-arrow svg{stroke:#fff}
 
-footer{position:relative;z-index:1;text-align:center;padding:3rem 2rem;border-top:1px solid rgba(30,39,64,.3)}
-footer p{color:#4a5568;font-size:.8rem}
-
 @media(max-width:768px){
   .grid{grid-template-columns:1fr}
   .hero{padding:8rem 1.5rem 3rem}
-  nav{padding:1rem 1.5rem}
 }
 </style>
 </head>
