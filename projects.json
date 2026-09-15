@@ -1,0 +1,14 @@
+[
+  {
+    "slug": "factory-harness",
+    "color": "#6366f1",
+    "tags": ["AI", "Multi-Agent", "TypeScript", "ClickUp"],
+    "url": "./factory-harness/",
+    "title": { "en": "Project Factory", "es": "Fábrica de Proyectos" },
+    "subtitle": { "en": "Autonomous Software Factory", "es": "Fábrica de Software Autónoma" },
+    "description": {
+      "en": "Multi-agent pipeline with quality gates. ClickUp as board, Claude Code as runtime, MR ready to merge.",
+      "es": "Pipeline multi-agente con quality gates. ClickUp como tablero, Claude Code como runtime, MR listo para merge."
+    }
+  }
+]

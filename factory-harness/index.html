@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Factory — Fábrica de Software Autónoma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Space Grotesk',sans-serif;background:#080b14;color:#e2e8f0;overflow-x:hidden}
+.loader{position:fixed;inset:0;background:#080b14;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99;transition:opacity .6s,visibility .6s;gap:1rem}
+.loader.off{opacity:0;visibility:hidden;pointer-events:none}
+.loader-spin{width:40px;height:40px;border:3px solid #1e2740;border-top-color:#6366f1;border-radius:50%;animation:sp .7s linear infinite}
+.loader-text{color:#8892a8;font-size:.85rem}
+@keyframes sp{to{transform:rotate(360deg)}}
+nav{position:fixed;top:0;left:0;right:0;z-index:10;padding:1rem 2.5rem;display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(18px);background:rgba(8,11,20,.75);border-bottom:1px solid rgba(30,39,64,.4)}
+.nl{font-weight:700;font-size:1.1rem;letter-spacing:-.5px}.nl span{color:#6366f1}
+.nk{display:flex;gap:2rem}.nk a{color:#8892a8;text-decoration:none;font-size:.85rem;font-weight:500;transition:color .3s}.nk a:hover{color:#e2e8f0}
+section{position:relative;padding:6rem 2rem}
+.ctn{max-width:1100px;margin:0 auto;width:100%}
+.sh{text-align:center;margin-bottom:3rem}.sh h2{font-size:clamp(1.8rem,4vw,2.6rem);font-weight:700;letter-spacing:-1.2px;margin-bottom:.7rem}.sh p{color:#8892a8;font-size:1rem;max-width:500px;margin:0 auto}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:7rem 2rem 3rem}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 55% 45% at 50% 40%,rgba(99,102,241,.07),transparent)}
+.hc{position:relative;z-index:2}
+.hb{display:inline-flex;align-items:center;gap:.5rem;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:100px;padding:.4rem 1.2rem;font-size:.76rem;color:#6366f1;font-weight:500;margin-bottom:2rem;opacity:0;animation:fu .7s 1.5s forwards}
+.hero h1{font-size:clamp(2.5rem,6.5vw,4.8rem);font-weight:700;letter-spacing:-2px;line-height:1.05;margin-bottom:1.5rem;opacity:0;animation:fu .7s 1.7s forwards}
+.hero h1 .g{background:linear-gradient(135deg,#6366f1,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:1.15rem;color:#8892a8;max-width:540px;margin:0 auto 2.5rem;line-height:1.7;opacity:0;animation:fu .7s 1.9s forwards}
+.hc2{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;opacity:0;animation:fu .7s 2.1s forwards}
+.btn{padding:.9rem 2rem;border-radius:13px;font-size:.92rem;font-weight:600;text-decoration:none;transition:all .3s;border:none;cursor:pointer;font-family:inherit}
+.bp{background:#6366f1;color:#fff;box-shadow:0 4px 18px rgba(99,102,241,.3)}.bp:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(99,102,241,.4)}
+.bs{background:#141a2a;color:#e2e8f0;border:1px solid #1e2740}.bs:hover{border-color:#6366f1;background:rgba(99,102,241,.08)}
+@keyframes fu{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1.2rem;margin-top:4rem;padding:2rem;background:#141a2a;border-radius:20px;border:1px solid #1e2740;opacity:0;animation:fu .7s 2.3s forwards}
+.st{text-align:center}.sv{font-size:2.1rem;font-weight:700;letter-spacing:-1px;background:linear-gradient(135deg,#6366f1,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent}.sl{color:#8892a8;font-size:.8rem;margin-top:.2rem;font-weight:500}
+#factory{padding:3rem 2rem 5rem}
+.ff{width:100%;border-radius:20px;overflow:hidden;border:1px solid #1e2740;background:#0c1018}
+#fc{width:100%;display:block}
+footer{text-align:center;padding:2rem;border-top:1px solid #1e2740;color:#8892a8;font-size:.8rem}
+@media(max-width:768px){.nk{display:none}section{padding:3.5rem 1rem}}
+</style>
+</head>
+<body>
+<div class="loader" id="ld"><div class="loader-spin"></div><div class="loader-text">Cargando fábrica...</div></div>
+<nav><div class="nl">⬡ Project <span>Factory</span></div><div class="nk"><a href="#factory">Fábrica</a><a href="https://github.com" target="_blank">GitHub →</a></div></nav>
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hc">
+    <div class="hb">⚡ Multi-agente · Autónomo · Production-ready</div>
+    <h1>Tu equipo de IA.<br><span class="g">Fabricando software real.</span></h1>
+    <p>9 robots agentes. 10 fases. Gates a nivel de SO. Un brief entra, un MR sale.</p>
+    <div class="hc2"><a href="#factory" class="btn bp">Ver la Fábrica</a></div>
+    <div class="stats">
+      <div class="st"><div class="sv">10</div><div class="sl">Fases</div></div>
+      <div class="st"><div class="sv">9</div><div class="sl">Agentes</div></div>
+      <div class="st"><div class="sv">$4.24</div><div class="sl">Coste limpia</div></div>
+      <div class="st"><div class="sv">530+</div><div class="sl">PRs</div></div>
+    </div>
+  </div>
+</section>
+<section id="factory"><div class="ctn"><div class="sh"><h2>La Fábrica en 3D</h2><p>Robots trabajando en cada estación. Mira cómo fluye el trabajo.</p></div><div class="ff"><canvas id="fc"></canvas></div></div></section>
+<footer><p>⬡ Project Factory — Fábrica de Software Multi-Agente</p></footer>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ---- Scene setup ----
+const canvas = document.getElementById('fc');
+const wrap = canvas.parentElement;
+let W = wrap.clientWidth || 900;
+let H = Math.min(W * 0.5, 480);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x080b14);
+renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x080b14, 30, 60);
+
+const camera = new THREE.PerspectiveCamera(35, W / H, 0.1, 200);
+camera.position.set(0, 12, 22);
+camera.lookAt(0, 0, 0);
+
+// ---- Lights ----
+scene.add(new THREE.AmbientLight(0x404060, 0.5));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444466, 0.6);
+hemi.position.set(0, 20, 0);
+scene.add(hemi);
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(8, 15, 10);
+dir.castShadow = true;
+dir.shadow.mapSize.set(1024, 1024);
+scene.add(dir);
+
+const purpleLight = new THREE.PointLight(0x6366f1, 1, 30);
+purpleLight.position.set(-10, 6, 0);
+scene.add(purpleLight);
+const cyanLight = new THREE.PointLight(0x22d3ee, 0.6, 25);
+cyanLight.position.set(10, 5, 5);
+scene.add(cyanLight);
+
+// ---- Floor ----
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(50, 30),
+  new THREE.MeshStandardMaterial({ color: 0x0f1728, roughness: 0.9 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const grid = new THREE.GridHelper(50, 25, 0x1a2540, 0x111827);
+scene.add(grid);
+
+// ---- Pipeline layout: U-shape ----
+// Top row (left→right): stations 0-4
+// Bottom row (right→left): stations 5-9
+const PHASES = [
+  { name: '00-Intake', role: 'product-manager', color: 0x8b5cf6, anim: 'Idle', human: false },
+  { name: '01-Definition', role: 'product-manager', color: 0x8b5cf6, anim: 'Idle', human: true },
+  { name: '02-Architecture', role: 'architect', color: 0x3b82f6, anim: 'Idle' },
+  { name: '03-Planning', role: 'planner', color: 0x06b6d4, anim: 'Idle' },
+  { name: '04-Design', role: 'ux + ui-designer', color: 0xec4899, anim: 'Idle' },
+  { name: '05-Scaffold', role: 'developer', color: 0xf59e0b, anim: 'Idle' },
+  { name: '06-Implementation', role: 'developer + code-reviewer', color: 0x22c55e, anim: 'Walking' },
+  { name: '07-QA', role: 'qa-engineer', color: 0x14b8a6, anim: 'Idle' },
+  { name: '08-Verification', role: 'verifier', color: 0x06b6d4, anim: 'Idle', human: true },
+  { name: '09-Delivery', role: 'product-manager', color: 0x22c55e, anim: 'Idle' },
+];
+
+// Supervisor: watches over the whole pipeline (not a phase, but an agent)
+const SUPERVISOR = { name: 'Supervisor', role: 'supervisor + triage', color: 0xf97316, anim: 'Idle' };
+
+const SPACING = 5;
+const TOP_Z = -2.5;
+const BOT_Z = 3;
+const START_X = -10;
+
+const stationPositions = [];
+for (let i = 0; i < 5; i++) stationPositions.push(new THREE.Vector3(START_X + i * SPACING, 0, TOP_Z));
+for (let i = 0; i < 5; i++) stationPositions.push(new THREE.Vector3(START_X + (4 - i) * SPACING, 0, BOT_Z));
+
+// ---- Desks ----
+function createDesk(pos, color) {
+  const g = new THREE.Group();
+  // Table
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.12, 1.2),
+    new THREE.MeshStandardMaterial({ color: 0x1a2540, roughness: 0.7 })
+  );
+  top.position.y = 0.8;
+  top.castShadow = true;
+  top.receiveShadow = true;
+  g.add(top);
+
+  // Legs
+  const lg = new THREE.CylinderGeometry(0.05, 0.05, 0.8, 6);
+  const lm = new THREE.MeshStandardMaterial({ color: 0x2a3550 });
+  [[-0.9, -0.45], [0.9, -0.45], [-0.9, 0.45], [0.9, 0.45]].forEach(([x, z]) => {
+    const l = new THREE.Mesh(lg, lm);
+    l.position.set(x, 0.4, z);
+    g.add(l);
+  });
+
+  // Monitor
+  const mon = new THREE.Mesh(
+    new THREE.BoxGeometry(1.3, 0.85, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x0a0f1a, emissive: color, emissiveIntensity: 0.15, roughness: 0.2 })
+  );
+  mon.position.set(0, 1.55, -0.35);
+  g.add(mon);
+
+  // Stand
+  const st = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6),
+    new THREE.MeshStandardMaterial({ color: 0x3a4560 })
+  );
+  st.position.set(0, 1.0, -0.35);
+  g.add(st);
+
+  // Laptop on desk
+  const laptop = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.03, 0.45),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, emissive: color, emissiveIntensity: 0.2, roughness: 0.3 })
+  );
+  laptop.position.set(0, 0.88, 0.2);
+  g.add(laptop);
+
+  // Laptop screen
+  const laptopScreen = new THREE.Mesh(
+    new THREE.BoxGeometry(0.65, 0.4, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x0a0f1a, emissive: color, emissiveIntensity: 0.25, roughness: 0.2 })
+  );
+  laptopScreen.position.set(0, 1.1, 0.42);
+  laptopScreen.rotation.x = -0.15;
+  g.add(laptopScreen);
+
+  // LED
+  const led = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 8, 8),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1 })
+  );
+  led.position.set(0.9, 0.92, 0);
+  g.add(led);
+
+  g.position.copy(pos);
+  scene.add(g);
+  return { group: g, monitor: mon, laptop: laptopScreen, led };
+}
+
+// ---- Gate arch ----
+function createGate(pos) {
+  const g = new THREE.Group();
+  const pm = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x22d3ee, emissiveIntensity: 0.3 });
+  const pg = new THREE.CylinderGeometry(0.07, 0.07, 3, 6);
+  const pL = new THREE.Mesh(pg, pm);
+  pL.position.set(-0.8, 1.5, 0);
+  g.add(pL);
+  const pR = new THREE.Mesh(pg, pm.clone());
+  pR.position.set(0.8, 1.5, 0);
+  g.add(pR);
+
+  const arch = new THREE.Mesh(
+    new THREE.TorusGeometry(0.8, 0.04, 6, 12, Math.PI),
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.5 })
+  );
+  arch.position.y = 3;
+  arch.rotation.z = Math.PI;
+  g.add(arch);
+
+  const barrier = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.6, 2.8),
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.05, side: THREE.DoubleSide })
+  );
+  barrier.position.y = 1.5;
+  barrier.rotation.y = Math.PI / 2;
+  g.add(barrier);
+
+  const lt = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x22d3ee, emissiveIntensity: 1 })
+  );
+  lt.position.y = 3.2;
+  g.add(lt);
+
+  g.position.copy(pos);
+  scene.add(g);
+  return { group: g, barrier, lt, arch };
+}
+
+// ---- Stations ----
+const desks = [];
+const gates = [];
+
+for (let i = 0; i < 10; i++) {
+  desks.push(createDesk(stationPositions[i], PHASES[i].color));
+}
+
+// Gates between stations (top row)
+for (let i = 0; i < 4; i++) {
+  const a = stationPositions[i], b = stationPositions[i + 1];
+  gates.push(createGate(new THREE.Vector3((a.x + b.x) / 2, 0, TOP_Z)));
+}
+// Gate top→bottom
+gates.push(createGate(new THREE.Vector3(START_X + 4 * SPACING, 0, (TOP_Z + BOT_Z) / 2)));
+// Gates bottom row
+for (let i = 5; i < 9; i++) {
+  const a = stationPositions[i], b = stationPositions[i + 1];
+  gates.push(createGate(new THREE.Vector3((a.x + b.x) / 2, 0, BOT_Z)));
+}
+
+// ---- Load Robot Model ----
+const ROBOT_URL = 'https://cdn.jsdelivr.net/npm/feng3d-three-examples@0.0.3/public/models/gltf/RobotExpressive/RobotExpressive.glb';
+const loader = new GLTFLoader();
+
+const robots = [];
+const mixers = [];
+const robotActions = [];
+
+let loadedCount = 0;
+const totalRobots = 11; // 10 phases + supervisor
+
+loader.load(ROBOT_URL, (gltf) => {
+  const baseModel = gltf.scene;
+  const baseAnims = gltf.animations;
+
+  for (let i = 0; i < totalRobots; i++) {
+    const model = baseModel.clone();
+    model.scale.set(0.35, 0.35, 0.35);
+
+    // Tint robot with phase color
+    const phaseData = i < 10 ? PHASES[i] : SUPERVISOR;
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.material = child.material.clone();
+        const c = new THREE.Color(phaseData.color);
+        child.material.emissive = c;
+        child.material.emissiveIntensity = 0.15;
+      }
+    });
+
+    // Position: phases sitting at desks, supervisor walks through
+    let pos;
+    if (i < 10) {
+      pos = stationPositions[i];
+      // Sit behind the desk, facing the monitor
+      model.position.set(pos.x, 0.45, pos.z + 0.9);
+      model.rotation.y = Math.PI; // face the desk/monitor
+    } else {
+      // Supervisor: starts at first station, will walk the path
+      model.position.set(stationPositions[0].x - 2, 0, TOP_Z - 1.5);
+      model.scale.set(0.4, 0.4, 0.4);
+    }
+
+    scene.add(model);
+
+    // Animation mixer
+    const mixer = new THREE.AnimationMixer(model);
+    mixers.push(mixer);
+
+    // Map animations
+    const actions = {};
+    baseAnims.forEach((clip) => {
+      actions[clip.name] = mixer.clipAction(clip);
+    });
+
+    // Play animation
+    if (i === 10) {
+      // Supervisor always walks
+      if (actions['Walking']) actions['Walking'].play();
+    } else if (actions[phaseData.anim]) {
+      actions[phaseData.anim].play();
+    } else if (actions['Idle']) {
+      actions['Idle'].play();
+    }
+
+    robotActions.push(actions);
+    robots.push(model);
+
+    loadedCount++;
+    if (loadedCount === totalRobots) {
+      setTimeout(() => document.getElementById('ld').classList.add('off'), 300);
+    }
+  }
+}, undefined, (err) => {
+  console.error('Error loading robot model:', err);
+  document.getElementById('ld').classList.add('off');
+});
+
+// ---- Brief and MR objects ----
+const briefG = new THREE.Group();
+const briefM = new THREE.Mesh(
+  new THREE.BoxGeometry(0.6, 0.4, 0.08),
+  new THREE.MeshStandardMaterial({ color: 0xf472b6, emissive: 0xf472b6, emissiveIntensity: 0.4 })
+);
+briefG.add(briefM);
+briefG.position.set(stationPositions[0].x - 3.5, 1, TOP_Z);
+scene.add(briefG);
+
+const mrG = new THREE.Group();
+const mrM = new THREE.Mesh(
+  new THREE.BoxGeometry(0.6, 0.4, 0.08),
+  new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x34d399, emissiveIntensity: 0.5 })
+);
+mrG.add(mrM);
+mrG.position.set(stationPositions[9].x - 3.5, 1, BOT_Z);
+scene.add(mrG);
+
+// ---- Flow particles ----
+const flowCount = 40;
+const flowGeo = new THREE.BufferGeometry();
+const flowPos = new Float32Array(flowCount * 3);
+const flowSpeeds = [];
+for (let i = 0; i < flowCount; i++) {
+  flowSpeeds.push(Math.random());
+  flowPos[i * 3] = (Math.random() - 0.5) * 30;
+  flowPos[i * 3 + 1] = 0.5 + Math.random() * 2;
+  flowPos[i * 3 + 2] = (Math.random() - 0.5) * 10;
+}
+flowGeo.setAttribute('position', new THREE.BufferAttribute(flowPos, 3));
+const flowMat = new THREE.PointsMaterial({
+  color: 0x6366f1, size: 0.12, transparent: true, opacity: 0.4,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const flowPts = new THREE.Points(flowGeo, flowMat);
+scene.add(flowPts);
+
+// ---- Connection lines ----
+for (let i = 0; i < 9; i++) {
+  const a = stationPositions[i].clone(); a.y = 0.02;
+  const b = stationPositions[i + 1].clone(); b.y = 0.02;
+  const lg = new THREE.BufferGeometry().setFromPoints([a, b]);
+  scene.add(new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0x1e2740, transparent: true, opacity: 0.3 })));
+}
+
+// ---- Labels (using sprites) ----
+function makeLabel(text, pos, color) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 80;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 256, 80);
+  ctx.textAlign = 'center';
+
+  const lines = text.split('\n');
+  ctx.font = 'bold 16px Space Grotesk, sans-serif';
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillText(lines[0], 128, 30);
+
+  if (lines[1]) {
+    ctx.font = '12px Space Grotesk, sans-serif';
+    ctx.fillStyle = '#8892a8';
+    ctx.fillText(lines[1], 128, 50);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  sp.position.set(pos.x, 3.8, pos.z);
+  sp.scale.set(3.5, 1, 1);
+  scene.add(sp);
+}
+
+for (let i = 0; i < 10; i++) {
+  makeLabel(PHASES[i].name + '\n' + PHASES[i].role, stationPositions[i]);
+}
+
+// Supervisor floating label (follows the robot)
+function makeSupervisorLabel() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 80;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 256, 80);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 16px Space Grotesk, sans-serif';
+  ctx.fillStyle = '#f97316';
+  ctx.fillText('Supervisor', 128, 30);
+  ctx.font = '12px Space Grotesk, sans-serif';
+  ctx.fillStyle = '#8892a8';
+  ctx.fillText('supervises all phases', 128, 50);
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  sp.position.set(0, 2.5, 0);
+  sp.scale.set(3.5, 1, 1);
+  scene.add(sp);
+  window._supervisorLabel = sp;
+}
+makeSupervisorLabel();
+
+// ---- Flowing cards ----
+const cardGeo = new THREE.BoxGeometry(0.7, 0.05, 0.5);
+const cardMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.3 });
+
+class FlowCard {
+  constructor(delay) {
+    this.progress = -0.05;
+    this.speed = 0.08 + Math.random() * 0.03;
+    this.delay = delay;
+    this.rejected = false;
+    this.rejT = 0;
+    this.rejFrom = 0;
+    this.rejTo = 0;
+    this.mesh = new THREE.Mesh(cardGeo, cardMat.clone());
+    this.mesh.castShadow = true;
+    this.mesh.visible = false;
+    scene.add(this.mesh);
+  }
+
+  getPos(t) {
+    const idx = t * 9;
+    const i = Math.floor(idx);
+    const f = idx - i;
+    if (i >= 9) return stationPositions[9].clone();
+    return stationPositions[i].clone().lerp(stationPositions[i + 1], f);
+  }
+
+  update(dt) {
+    if (this.delay > 0) { this.delay -= dt; return; }
+
+    if (this.rejected) {
+      this.rejT += dt * 1.2;
+      if (this.rejT >= 1) {
+        this.rejected = false;
+        this.rejT = 0;
+        this.progress = this.rejTo / 9;
+        this.mesh.material.color.setHex(0xfbbf24);
+        this.mesh.material.emissive.setHex(0xfbbf24);
+        return;
+      }
+      const from = stationPositions[this.rejFrom];
+      const to = stationPositions[this.rejTo];
+      const t = this.rejT;
+      const x = from.x + (to.x - from.x) * t;
+      const z = from.z + (to.z - from.z) * t;
+      const arc = 3 * Math.sin(t * Math.PI);
+      this.mesh.position.set(x, 1.5 + arc, z);
+      this.mesh.rotation.y += dt * 4;
+      this.mesh.material.color.setHex(0xef4444);
+      this.mesh.material.emissive.setHex(0xef4444);
+      this.mesh.material.emissiveIntensity = 0.8;
+      return;
+    }
+
+    this.progress += this.speed * dt;
+    if (this.progress > 1.05) {
+      this.progress = -0.05;
+      this.delay = 2 + Math.random() * 3;
+      this.mesh.visible = false;
+      return;
+    }
+
+    this.mesh.visible = true;
+    const t = Math.max(0, Math.min(this.progress, 1));
+    const pos = this.getPos(t);
+    this.mesh.position.set(pos.x, 1.1, pos.z);
+    this.mesh.position.y += Math.sin(time * 3 + this.delay) * 0.08;
+    this.mesh.rotation.y = 0;
+    this.mesh.material.emissiveIntensity = 0.3;
+    this.mesh.material.color.setHex(0xfbbf24);
+    this.mesh.material.emissive.setHex(0xfbbf24);
+
+    // Check gate pass
+    const phaseIdx = Math.floor(t * 9);
+    if (phaseIdx < gates.length) {
+      const gate = gates[phaseIdx];
+      const gateX = (stationPositions[phaseIdx].x + stationPositions[phaseIdx + 1].x) / 2;
+      const dist = Math.abs(this.mesh.position.x - gateX);
+      if (dist < 1.5 && !gate._passed) {
+        gate._passed = true;
+        gate.barrier.material.opacity = 0.2;
+        gate.lt.material.emissive.setHex(0x34d399);
+        gate.lt.material.color.setHex(0x34d399);
+        gate.arch.material.color.setHex(0x34d399);
+        // Flash robot
+        if (robots[phaseIdx]) {
+          robots[phaseIdx].traverse(c => {
+            if (c.isMesh) { c.material.emissiveIntensity = 0.6; }
+          });
+          setTimeout(() => {
+            robots[phaseIdx]?.traverse(c => {
+              if (c.isMesh) { c.material.emissiveIntensity = 0.15; }
+            });
+          }, 500);
+        }
+        setTimeout(() => {
+          gate.barrier.material.opacity = 0.05;
+          gate.lt.material.emissive.setHex(0x22d3ee);
+          gate.lt.material.color.setHex(0x22d3ee);
+          gate.arch.material.color.setHex(0x22d3ee);
+          gate._passed = false;
+        }, 800);
+      }
+    }
+
+    // Rejection based on phases.yaml on_fail_back_to:
+    // 05-scaffold → 02-architecture
+    // 07-qa → 06-implementation
+    // 08-verification → 06-implementation
+    const rejectMap = { 5: 2, 7: 6, 8: 6 };
+    if (rejectMap[phaseIdx] !== undefined && !this._ck) {
+      const stationDist = this.mesh.position.distanceTo(stationPositions[phaseIdx]);
+      if (stationDist < 1.5) {
+        this._ck = phaseIdx;
+        if (Math.random() < 0.15) {
+          this.rejected = true;
+          this.rejFrom = phaseIdx;
+          this.rejTo = rejectMap[phaseIdx];
+          this.rejT = 0;
+          // Flash robot red
+          if (robots[phaseIdx]) {
+            robots[phaseIdx].traverse(c => {
+              if (c.isMesh) { c.material.emissive.setHex(0xef4444); c.material.emissiveIntensity = 0.8; }
+            });
+            setTimeout(() => {
+              robots[phaseIdx]?.traverse(c => {
+                if (c.isMesh) { c.material.emissive.setHex(PHASES[phaseIdx].color); c.material.emissiveIntensity = 0.15; }
+              });
+            }, 1000);
+          }
+        }
+      }
+    }
+    if (phaseIdx !== this._ck) this._ck = null;
+  }
+}
+
+const cards = [];
+for (let i = 0; i < 4; i++) cards.push(new FlowCard(i * 2));
+
+// ---- Reject path visualization (3D lines) ----
+// Three rejection paths per phases.yaml:
+// 05-scaffold (idx 5) → 02-architecture (idx 2)
+// 07-qa (idx 7) → 06-implementation (idx 6)
+// 08-verification (idx 8) → 06-implementation (idx 6)
+
+function createRejectPath(fromIdx, toIdx, heightOffset) {
+  const from = stationPositions[fromIdx].clone().setY(0.5);
+  const to = stationPositions[toIdx].clone().setY(0.5);
+  const mid = new THREE.Vector3(
+    (from.x + to.x) / 2,
+    2.5 + heightOffset,
+    (from.z + to.z) / 2 + 0.5
+  );
+  const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
+  const geo = new THREE.TubeGeometry(curve, 20, 0.035, 8, false);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.2 });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  return { mesh, mat, curve };
+}
+
+const rejPaths = [
+  createRejectPath(5, 2, 1.5),  // scaffold → architecture
+  createRejectPath(7, 6, 0.8),  // qa → implementation
+  createRejectPath(8, 6, 1.2),  // verification → implementation
+];
+
+// Reject arrows at each path end
+const rejArrows = [];
+rejPaths.forEach((p, idx) => {
+  const endPt = p.curve.getPoint(1);
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.1, 0.25, 8),
+    new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 0.8 })
+  );
+  arrow.position.copy(endPt);
+  arrow.rotation.x = Math.PI / 2;
+  scene.add(arrow);
+  rejArrows.push(arrow);
+});
+
+// ---- Task loop arc at Implementation ----
+const taskLoopCurve = new THREE.EllipseCurve(0, 0, 1.5, 1.5, Math.PI * 0.7, Math.PI * 0.3, false);
+const taskLoopPts = taskLoopCurve.getPoints(30).map(p => new THREE.Vector3(stationPositions[6].x + p.x, 0.5, stationPositions[6].z + 1.5 + p.y));
+const taskLoopGeo = new THREE.BufferGeometry().setFromPoints(taskLoopPts);
+const taskLoopLine = new THREE.Line(taskLoopGeo, new THREE.LineBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.35 }));
+scene.add(taskLoopLine);
+
+// ---- Animation loop ----
+let time = 0;
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  time += dt;
+
+  // Update mixers
+  mixers.forEach(m => m.update(dt));
+
+  // Update cards
+  cards.forEach(c => c.update(dt));
+
+  // Supervisor walking path: back and forth down the middle aisle
+  if (robots[10]) {
+    const supervisor = robots[10];
+    // Middle aisle between the two rows
+    const midZ = (TOP_Z + BOT_Z) / 2;
+    const startX = stationPositions[0].x;
+    const endX = stationPositions[4].x;
+
+    // Walk down the aisle: left to right, then right to left
+    const speed = 2.0; // units per second
+    const totalDist = (endX - startX) * 2;
+    const rawPos = (time * speed) % totalDist;
+    let x;
+    if (rawPos < endX - startX) {
+      // Going right
+      x = startX + rawPos;
+      supervisor.rotation.y = Math.PI / 2; // face right
+    } else {
+      // Going left
+      x = endX - (rawPos - (endX - startX));
+      supervisor.rotation.y = -Math.PI / 2; // face left
+    }
+
+    supervisor.position.set(x, 0.45, midZ);
+
+    // Update supervisor label position
+    if (window._supervisorLabel) {
+      window._supervisorLabel.position.set(x, 2.2, midZ);
+    }
+  }
+
+  // Camera orbit
+  const camAngle = time * 0.15;
+  camera.position.x = Math.sin(camAngle) * 18;
+  camera.position.z = Math.cos(camAngle) * 18;
+  camera.position.y = 10 + Math.sin(camAngle * 0.3) * 2;
+  camera.lookAt(0, 1, 0);
+
+  // Gate pulse
+  gates.forEach((g, i) => {
+    const p = 0.3 + Math.sin(time * 2.5 + i) * 0.15;
+    g.lt.material.emissiveIntensity = 0.5 + Math.sin(time * 2 + i) * 0.3;
+    g.barrier.material.opacity = 0.03 + Math.sin(time * 3 + i) * 0.02;
+  });
+
+  // Desk LED + laptop screen pulse
+  desks.forEach((d, i) => {
+    d.led.material.emissiveIntensity = 0.5 + Math.sin(time * 2 + i) * 0.4;
+    d.monitor.material.emissiveIntensity = 0.1 + Math.sin(time + i * 0.5) * 0.08;
+    d.laptop.material.emissiveIntensity = 0.15 + Math.sin(time * 1.5 + i * 0.7) * 0.1;
+  });
+
+  // Brief bob
+  briefG.position.y = 1 + Math.sin(time * 1.5) * 0.2;
+  briefG.rotation.y = time * 0.5;
+
+  // MR bob
+  mrG.position.y = 1 + Math.sin(time * 1.8) * 0.2;
+  mrG.rotation.y = time * 0.5;
+
+  // Flow particles
+  const fp = flowGeo.attributes.position.array;
+  for (let i = 0; i < flowCount; i++) {
+    flowSpeeds[i] += 0.003;
+    if (flowSpeeds[i] > 1) flowSpeeds[i] = 0;
+    fp[i * 3 + 1] = 0.5 + Math.sin(time * 2 + i) * 0.5;
+  }
+  flowGeo.attributes.position.needsUpdate = true;
+
+  // Reject paths pulse
+  rejPaths.forEach((p, i) => {
+    p.mat.opacity = 0.12 + Math.sin(time * 2 + i) * 0.08;
+  });
+  rejArrows.forEach((a, i) => {
+    a.material.emissiveIntensity = 0.4 + Math.sin(time * 3 + i) * 0.4;
+  });
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// ---- Resize ----
+window.addEventListener('resize', () => {
+  W = wrap.clientWidth || 900;
+  H = Math.min(W * 0.5, 480);
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+  renderer.setSize(W, H);
+});
+</script>
+</body>
+</html>
