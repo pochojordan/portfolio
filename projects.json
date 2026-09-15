@@ -10,5 +10,17 @@
       "en": "Multi-agent pipeline with quality gates. ClickUp as board, Claude Code as runtime, MR ready to merge.",
       "es": "Pipeline multi-agente con quality gates. ClickUp como tablero, Claude Code como runtime, MR listo para merge."
     }
+  },
+  {
+    "slug": "poketeam-overlay-widget",
+    "color": "#8257e5",
+    "tags": ["Twitch", "Pokémon", "Widget", "Firebase", "JavaScript"],
+    "url": "./poketeam-overlay-widget/",
+    "title": { "en": "Pokéteam Overlay", "es": "Pokéteam Overlay" },
+    "subtitle": { "en": "Twitch Stream Overlay Widget", "es": "Widget Overlay para Twitch" },
+    "description": {
+      "en": "Live Pokémon team overlay for Twitch streams. Import from Showdown, 5 border styles, real-time customization via Firebase.",
+      "es": "Overlay de equipo Pokémon en vivo para Twitch. Import desde Showdown, 5 estilos de borde, personalización en tiempo real vía Firebase."
+    }
   }
 ]
