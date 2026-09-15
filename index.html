@@ -137,10 +137,13 @@ function applyLang(lang) {
   if (window.__navRender) window.__navRender();
 }
 
-document.getElementById('langToggle').addEventListener('click', (e) => {
-  const btn = e.target.closest('.lang-btn');
-  if (btn) applyLang(btn.dataset.lang);
-});
+const langToggle = document.getElementById('langToggle');
+if (langToggle) {
+  langToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.lang-btn');
+    if (btn) applyLang(btn.dataset.lang);
+  });
+}
 
 // ---- Three.js: AI dev scene ----
 const canvas = document.getElementById('bg');

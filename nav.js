@@ -2,7 +2,8 @@
 // Detects current page and renders appropriate nav
 
 (function () {
-  const isHome = location.pathname === '/' || location.pathname.endsWith('index.html') && !location.pathname.includes('/factory');
+  const path = location.pathname.replace(/\/+$/, '');
+  const isHome = path === '' || path.endsWith('/portfolio') || path.endsWith('/portfolio/index.html') || path === '/index.html';
 
   const i18n = {
     es: { nav_projects: 'Proyectos', nav_back: '← Portfolio' },
@@ -46,7 +47,6 @@
 
   render();
 
-  // Expose for i18n lang toggle on home page
   window.__navRender = render;
   window.__navI18n = i18n;
 })();
