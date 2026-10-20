@@ -2,6 +2,8 @@ import * as THREE from 'three';
 
 const WORKSPACE_BG = 0x06080f;
 const PALETTE = ['#6366f1', '#a855f7', '#06b6d4', '#3b82f6'];
+const MAX_MONITORS = 6;
+const MONITOR_Y = 2.45;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -428,39 +430,39 @@ export class CyberpunkWorkspace {
   }
 
   _computeSlots() {
-    const n = this.projects.length;
+    const n = this.monitors.length;
 
     if (this.portrait) {
       const stacked = [
         { x: 0.05, z: -0.35, rot: -0.06, scale: 0.9 },
         { x: -1.15, z: -1.95, rot: 0.16, scale: 0.78 },
         { x: 1.25, z: -3.15, rot: -0.18, scale: 0.68 },
+        { x: -0.25, z: -4.35, rot: 0.06, scale: 0.6 },
+        { x: 1.05, z: -5.35, rot: -0.12, scale: 0.53 },
+        { x: -0.9, z: -6.2, rot: 0.14, scale: 0.47 },
       ];
-      return this.projects.map((_, i) => stacked[i] || {
-        x: (i % 2 === 0 ? 0.2 : -0.8),
-        z: -0.35 - i * 1.4,
-        rot: i % 2 === 0 ? -0.05 : 0.14,
-        scale: Math.max(0.5, 0.86 - i * 0.08),
-      });
+      return stacked.slice(0, n);
     }
 
-    const layouts = {
-      1: [{ x: 0, z: -0.3, rot: 0, scale: 1.05 }],
-      2: [
-        { x: -1.85, z: -0.15, rot: 0.14, scale: 1 },
-        { x: 1.85, z: -0.4, rot: -0.14, scale: 0.94 },
-      ],
-      3: [
-        { x: -2.5, z: -0.55, rot: 0.2, scale: 0.9 },
-        { x: 0, z: -0.2, rot: 0, scale: 1.05 },
-        { x: 2.5, z: -0.55, rot: -0.2, scale: 0.9 },
-      ],
-    };
+    const front2 = [
+      { x: -1.8, z: -0.2, rot: 0.13, scale: 1 },
+      { x: 1.8, z: -0.4, rot: -0.13, scale: 0.95 },
+    ];
+    const front3 = [
+      { x: -3.02, z: -0.65, rot: 0.16, scale: 0.86 },
+      { x: 0, z: -0.2, rot: 0, scale: 1 },
+      { x: 3.02, z: -0.65, rot: -0.16, scale: 0.86 },
+    ];
+    const wall = (xs, scale = 0.7, lift = 1.3) => xs.map((x) => ({
+      x, z: -2.1, rot: -x * 0.045, scale, lift, mounted: true,
+    }));
 
-    return layouts[n] || this.projects.map((_, i) => {
-      const t = n === 1 ? 0 : i / (n - 1) - 0.5;
-      return { x: t * 5.4, z: -0.3 - Math.abs(t) * 1.2, rot: -t * 0.5, scale: 1 - Math.abs(t) * 0.15 };
-    });
+    if (n <= 1) return [{ x: 0, z: -0.3, rot: 0, scale: 1.05 }];
+    if (n === 2) return front2;
+    if (n === 3) return front3;
+    if (n === 4) return [...front2, ...wall([-3.25, 3.25], 0.72, 1.25)];
+    if (n === 5) return [...front3, ...wall([-3.4, 3.4], 0.7)];
+    return [...front3, ...wall([-3.05, 0, 3.05], 0.7)];
   }
 
   _applyLayout() {
@@ -469,13 +471,15 @@ export class CyberpunkWorkspace {
       const slot = slots[i] || slots[slots.length - 1];
       monitor.slot = slot;
       monitor.baseScale = slot.scale;
+      monitor.baseY = MONITOR_Y + (slot.lift || 0);
       monitor.group.position.set(slot.x, monitor.baseY, slot.z);
       monitor.group.rotation.y = slot.rot;
+      monitor.stand.visible = !slot.mounted;
     });
   }
 
   _buildMonitors() {
-    this.projects.forEach((project, i) => {
+    this.projects.slice(0, MAX_MONITORS).forEach((project, i) => {
       const monitor = this._createMonitor(project, i);
       this.scene.add(monitor);
     });
@@ -521,6 +525,7 @@ export class CyberpunkWorkspace {
     group.add(halo);
 
     const glow = new THREE.PointLight(accent, 5.5, 4.2, 2);
+    glow.visible = this.quality !== 'low';
     glow.position.set(0, 0, 0.75);
     group.add(glow);
 
@@ -534,10 +539,12 @@ export class CyberpunkWorkspace {
     const standMat = new THREE.MeshStandardMaterial({ color: 0x10151f, roughness: 0.45, metalness: 0.8 });
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.48, 12), standMat);
     neck.position.y = -(H / 2 + 0.26);
-    group.add(neck);
+    const stand = new THREE.Group();
+    stand.add(neck);
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.05, 24), standMat);
     base.position.y = -(H / 2 + 0.5);
-    group.add(base);
+    stand.add(base);
+    group.add(stand);
 
     const hitbox = new THREE.Mesh(
       new THREE.PlaneGeometry(W + 0.5, H + 0.9),
@@ -555,6 +562,7 @@ export class CyberpunkWorkspace {
       halo,
       glow,
       strip,
+      stand,
       project,
       slot: null,
       index,
@@ -562,7 +570,7 @@ export class CyberpunkWorkspace {
       hover: 0,
       boot: 0,
       bootDelay: index * 0.12,
-      baseY: 2.45,
+      baseY: MONITOR_Y,
     };
     monitor.userData = { slug: project.slug };
     group.userData = { slug: project.slug };
