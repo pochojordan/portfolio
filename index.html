@@ -112,13 +112,7 @@ main{position:relative;z-index:2;padding-top:100svh}
 
 footer{background:#06080f;position:relative;z-index:2}
 
-/* ---- Tooltip ---- */
-.ws-tip{position:fixed;left:0;top:0;z-index:30;display:flex;align-items:center;gap:.85rem;padding:.7rem .95rem;border-radius:12px;background:rgba(9,13,23,.94);border:1px solid color-mix(in srgb,var(--accent,#6366f1) 35%,transparent);box-shadow:0 16px 50px rgba(0,0,0,.6),0 0 30px color-mix(in srgb,var(--accent,#6366f1) 14%,transparent);backdrop-filter:blur(14px);pointer-events:none;opacity:0;transform:translate(16px,16px) scale(.96);transition:opacity .16s ease,transform .16s ease}
-.ws-tip.show{opacity:1;transform:translate(16px,16px) scale(1)}
-.ws-tip-dot{width:8px;height:8px;border-radius:50%;background:var(--accent,#6366f1);box-shadow:0 0 12px var(--accent,#6366f1);flex-shrink:0}
-.ws-tip-title{font-size:.82rem;font-weight:600;color:#eef2fa;line-height:1.2}
-.ws-tip-sub{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:#6b7793;margin-top:.25rem}
-.ws-tip-arrow{color:var(--accent,#6366f1);font-size:.9rem;margin-left:.35rem}
+
 
 /* ---- Page transition ---- */
 .page-transition{position:fixed;inset:0;z-index:90;opacity:0;pointer-events:none;background:radial-gradient(circle at 50% 45%,color-mix(in srgb,var(--pt-accent,#6366f1) 60%,#06080f) 0%,#06080f 66%);transition:opacity .5s ease}
@@ -166,7 +160,7 @@ footer{background:#06080f;position:relative;z-index:2}
     </div>
   </div>
   <div class="hero-meta"><span class="live"></span><span data-i18n="status">Disponible para nuevos proyectos</span></div>
-  <div class="hero-meta-right"><span data-i18n="hint">Mueve el ratón · haz click en un monitor</span><span class="scroll-cue">↓</span></div>
+  <div class="hero-meta-right"><span data-i18n="hint">Agentes trabajando en vivo · scroll para ver proyectos</span><span class="scroll-cue">↓</span></div>
 </div>
 
 <main>
@@ -175,7 +169,7 @@ footer{background:#06080f;position:relative;z-index:2}
       <div class="sec-head">
         <span class="sec-kicker" data-i18n="projects_kicker">01 — Proyectos</span>
         <h2 data-i18n="projects_title">Trabajo seleccionado</h2>
-        <p data-i18n="projects_desc">Sistemas que construí para resolver problemas reales. Cada tarjeta es también un monitor dentro del workspace 3D.</p>
+        <p data-i18n="projects_desc">Sistemas que construí para resolver problemas reales, desde la interfaz hasta la infraestructura.</p>
       </div>
       <div class="grid" id="grid"></div>
     </div>
@@ -221,15 +215,6 @@ footer{background:#06080f;position:relative;z-index:2}
   <p data-i18n="footer">© 2026 jjordan — diseñado y construido desde cero</p>
 </footer>
 
-<div class="ws-tip" id="tip">
-  <span class="ws-tip-dot"></span>
-  <div>
-    <div class="ws-tip-title"></div>
-    <div class="ws-tip-sub"></div>
-  </div>
-  <span class="ws-tip-arrow">↗</span>
-</div>
-
 <div class="page-transition" id="pt"></div>
 
 <script src="nav.js"></script>
@@ -243,10 +228,10 @@ const i18n = {
     cta_projects: 'Ver proyectos',
     cta_github: 'GitHub',
     status: 'Disponible para nuevos proyectos',
-    hint: 'Mueve el ratón · haz click en un monitor',
+    hint: 'Agentes trabajando en vivo · scroll para ver proyectos',
     projects_kicker: '01 — Proyectos',
     projects_title: 'Trabajo seleccionado',
-    projects_desc: 'Sistemas que construí para resolver problemas reales. Cada tarjeta es también un monitor dentro del workspace 3D.',
+    projects_desc: 'Sistemas que construí para resolver problemas reales, desde la interfaz hasta la infraestructura.',
     view_project: 'Ver proyecto',
     about_kicker: '02 — Sobre mí',
     about_title: 'Construyo sistemas<br>que se construyen<br><em>a sí mismos.</em>',
@@ -269,10 +254,10 @@ const i18n = {
     cta_projects: 'View projects',
     cta_github: 'GitHub',
     status: 'Available for new projects',
-    hint: 'Move your cursor · click a monitor',
+    hint: 'Agents working live · scroll to see projects',
     projects_kicker: '01 — Projects',
     projects_title: 'Selected work',
-    projects_desc: 'Systems I built to solve real problems. Every card is also a monitor inside the 3D workspace.',
+    projects_desc: 'Systems I built to solve real problems, from the interface down to the infrastructure.',
     view_project: 'View project',
     about_kicker: '02 — About',
     about_title: 'I build systems<br>that build<br><em>themselves.</em>',
@@ -295,9 +280,7 @@ const $ = (sel, root = document) => root.querySelector(sel);
 let lang = localStorage.getItem('lang') || 'es';
 let projects = [];
 let workspace = null;
-let navigating = false;
 
-const tip = $('#tip');
 const canvas = $('#bg');
 const hero = $('#hero');
 
@@ -326,7 +309,7 @@ function renderCards() {
   grid.innerHTML = '';
   projects.forEach((p, i) => {
     const card = document.createElement('a');
-    card.href = p.url;
+    card.href = p.url || '#projects';
     card.className = 'card';
     card.style.setProperty('--accent', p.color);
     card.innerHTML = `
@@ -344,38 +327,16 @@ function renderCards() {
   });
 }
 
-function moveTip(x, y) {
-  tip.style.left = `${x}px`;
-  tip.style.top = `${y}px`;
+function goToProjects() {
+  $('#projects')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function onHover(project, x, y) {
-  if (!project) {
-    tip.classList.remove('show');
-    return;
-  }
-  tip.style.setProperty('--accent', project.color);
-  tip.querySelector('.ws-tip-title').textContent = project.title[lang];
-  tip.querySelector('.ws-tip-sub').textContent = project.subtitle[lang];
-  tip.classList.add('show');
-  moveTip(x, y);
-}
-
-window.addEventListener('pointermove', (e) => {
-  if (tip.classList.contains('show')) moveTip(e.clientX, e.clientY);
-}, { passive: true });
-
-function onSelect(project) {
-  if (navigating) return;
-  navigating = true;
-  const pt = $('#pt');
-  pt.style.setProperty('--pt-accent', project.color);
-  pt.classList.add('on');
-  if (workspace) workspace.focusProject(project.slug);
-  setTimeout(() => {
-    window.location.href = project.url;
-  }, 720);
-}
+document.addEventListener('click', (e) => {
+  if (window.scrollY > 40) return;
+  if (e.target.closest('a, button, nav')) return;
+  if (!window.getSelection()?.isCollapsed) return;
+  goToProjects();
+});
 
 function onScroll() {
   const y = window.scrollY;
@@ -390,7 +351,10 @@ function onScroll() {
   canvas.style.opacity = String(1 - Math.min(y / (vh * 1.4), 1) * fade);
   const nav = document.querySelector('nav.nav-home');
   if (nav) nav.classList.toggle('scrolled', y > 40);
-  if (workspace) workspace.setScroll(y / (vh * 1.6));
+  if (workspace) {
+    workspace.setScroll(y / (vh * 1.6));
+    workspace.setPaused(y > vh * 1.9);
+  }
 }
 
 window.addEventListener('scroll', onScroll, { passive: true });
@@ -408,10 +372,8 @@ async function boot() {
 
   try {
     workspace = new CyberpunkWorkspace(canvas, {
-      projects,
       lang,
-      onHover,
-      onSelect
+      onWorkspaceClick: goToProjects
     });
     await workspace.init();
     onScroll();

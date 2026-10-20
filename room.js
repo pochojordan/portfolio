@@ -2,8 +2,51 @@ import * as THREE from 'three';
 
 const WORKSPACE_BG = 0x06080f;
 const PALETTE = ['#6366f1', '#a855f7', '#06b6d4', '#3b82f6'];
-const MAX_MONITORS = 6;
 const MONITOR_Y = 2.45;
+
+const AGENT_COLORS = {
+  orchestrator: '#818cf8',
+  planner: '#c084fc',
+  coder: '#a78bfa',
+  reviewer: '#22d3ee',
+  ops: '#60a5fa',
+};
+
+const AGENT_LOG = [
+  ['orchestrator', 'planning task #1842', '#cbd5e1'],
+  ['planner', 'decompose → 5 subtasks', '#cbd5e1'],
+  ['coder', 'edit src/api/route.ts  +42 −7', '#cbd5e1'],
+  ['coder', 'running typecheck…', '#94a3b8'],
+  ['reviewer', '12 tests passed · 0 failed', '#34d399'],
+  ['coder', 'repair 2 type errors', '#fbbf24'],
+  ['reviewer', 're-run suite ✓', '#34d399'],
+  ['ops', 'merge request !317 opened', '#cbd5e1'],
+  ['orchestrator', '✓ task complete in 3m 12s', '#34d399'],
+];
+
+const AGENTS = [
+  { name: 'orchestrator', task: 'coordinating 3 workers', speed: 0.7, phase: 0.0 },
+  { name: 'planner', task: 'subtasks 4/5 done', speed: 0.9, phase: 1.7 },
+  { name: 'coder', task: 'editing route.ts', speed: 1.2, phase: 3.1 },
+  { name: 'reviewer', task: 'running test suite', speed: 0.8, phase: 4.6 },
+];
+
+const EDITOR_CODE = `// factory-harness · src/api/route.ts
+import { pipeline } from '@factory/core';
+
+export async function run(task: Task) {
+  const plan = await planner.decompose(task);
+
+  for (const step of plan.steps) {
+    const patch = await coder.implement(step);
+    const ok = await reviewer.verify(patch);
+
+    if (!ok) await coder.repair(patch, reviewer.notes);
+    await ops.queueMerge(patch);
+  }
+
+  return { status: 'merged', task: task.id };
+}`;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -14,31 +57,34 @@ function hexToRgba(hex, a = 1) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-function mixHex(hex, target, amount) {
-  const a = new THREE.Color(hex);
-  const b = new THREE.Color(target);
-  return `#${a.lerp(b, amount).getHexString()}`;
+function clockString(seconds) {
+  const base = 12 * 3600 + 4 * 60 + 11 + Math.floor(seconds);
+  const h = String(Math.floor(base / 3600) % 24).padStart(2, '0');
+  const m = String(Math.floor(base / 60) % 60).padStart(2, '0');
+  const s = String(base % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
 }
 
 export class CyberpunkWorkspace {
   constructor(canvas, opts = {}) {
     this.canvas = canvas;
-    this.projects = opts.projects || [];
-    this.onHover = opts.onHover || (() => {});
-    this.onSelect = opts.onSelect || (() => {});
+    this.onWorkspaceClick = opts.onWorkspaceClick || (() => {});
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.quality = this._quality();
     this.lang = opts.lang || 'es';
 
-    this.interactives = [];
-    this.monitors = [];
-    this.screenSurfaces = [];
+    this.liveScreens = [];
+    this.screenAcc = 0;
+    this.simTime = 0;
+    this.logTimer = 0;
+    this.logIndex = 0;
+    this.logLines = [];
+    this.codeReveal = 150;
+    this.codeHold = 0;
 
     this.pointer = new THREE.Vector2();
     this.pointerTarget = new THREE.Vector2();
     this.scrollProgress = 0;
-    this.hovered = null;
-    this.focus = null;
     this.lookCurrent = new THREE.Vector3(0, 1.85, 0);
     this.lookTarget = new THREE.Vector3(0, 1.85, 0);
 
@@ -47,6 +93,10 @@ export class CyberpunkWorkspace {
     this.raf = 0;
     this.disposed = false;
     this.ready = false;
+    this.paused = false;
+    this.startedAt = performance.now();
+    this.frameAvg = 1 / 60;
+    this.slowFrames = 0;
   }
 
   _quality() {
@@ -67,7 +117,7 @@ export class CyberpunkWorkspace {
     this._buildBackdrop();
     this._buildDesk();
     this._buildDecor();
-    this._buildMonitors();
+    this._buildScreens();
     this._buildParticles();
     await this._setupPost();
     this._setupEvents();
@@ -83,12 +133,19 @@ export class CyberpunkWorkspace {
       alpha: false,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality === 'high' ? 2 : 1.5));
+    this.renderer.setPixelRatio(this._pixelRatio());
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
     this.renderer.setClearColor(WORKSPACE_BG, 1);
+  }
+
+  _pixelRatio() {
+    const dpr = window.devicePixelRatio || 1;
+    if (this.quality === 'high') return Math.min(dpr, 1.5);
+    if (this.quality === 'medium') return Math.min(dpr, 1.25);
+    return 1;
   }
 
   _isPortrait() {
@@ -429,68 +486,54 @@ export class CyberpunkWorkspace {
     this.scene.add(group);
   }
 
-  _computeSlots() {
-    const n = this.monitors.length;
-
+  _screenLayout() {
     if (this.portrait) {
-      const stacked = [
-        { x: 0.05, z: -0.35, rot: -0.06, scale: 0.9 },
-        { x: -1.15, z: -1.95, rot: 0.16, scale: 0.78 },
-        { x: 1.25, z: -3.15, rot: -0.18, scale: 0.68 },
-        { x: -0.25, z: -4.35, rot: 0.06, scale: 0.6 },
-        { x: 1.05, z: -5.35, rot: -0.12, scale: 0.53 },
-        { x: -0.9, z: -6.2, rot: 0.14, scale: 0.47 },
+      return [
+        { key: 'terminal', x: 0.05, y: MONITOR_Y, z: -0.35, rot: -0.06, scale: 0.9 },
+        { key: 'editor', x: -0.4, y: MONITOR_Y + 0.9, z: -2.6, rot: 0.05, scale: 0.7, mounted: true, hidden: true },
+        { key: 'dash', x: 0.05, y: MONITOR_Y + 1.5, z: -1.35, rot: -0.03, scale: 0.6, mounted: true },
       ];
-      return stacked.slice(0, n);
     }
-
-    const front2 = [
-      { x: -1.8, z: -0.2, rot: 0.13, scale: 1 },
-      { x: 1.8, z: -0.4, rot: -0.13, scale: 0.95 },
+    return [
+      { key: 'terminal', x: -1.78, y: MONITOR_Y, z: -0.32, rot: 0.1, scale: 0.98 },
+      { key: 'editor', x: 1.78, y: MONITOR_Y, z: -0.45, rot: -0.1, scale: 0.94 },
+      { key: 'dash', x: 0, y: MONITOR_Y + 1.9, z: -2, rot: 0, scale: 0.9, mounted: true },
     ];
-    const front3 = [
-      { x: -3.02, z: -0.65, rot: 0.16, scale: 0.86 },
-      { x: 0, z: -0.2, rot: 0, scale: 1 },
-      { x: 3.02, z: -0.65, rot: -0.16, scale: 0.86 },
-    ];
-    const wall = (xs, scale = 0.7, lift = 1.3) => xs.map((x) => ({
-      x, z: -2.1, rot: -x * 0.045, scale, lift, mounted: true,
-    }));
-
-    if (n <= 1) return [{ x: 0, z: -0.3, rot: 0, scale: 1.05 }];
-    if (n === 2) return front2;
-    if (n === 3) return front3;
-    if (n === 4) return [...front2, ...wall([-3.25, 3.25], 0.72, 1.25)];
-    if (n === 5) return [...front3, ...wall([-3.4, 3.4], 0.7)];
-    return [...front3, ...wall([-3.05, 0, 3.05], 0.7)];
   }
 
-  _applyLayout() {
-    const slots = this._computeSlots();
-    this.monitors.forEach((monitor, i) => {
-      const slot = slots[i] || slots[slots.length - 1];
-      monitor.slot = slot;
-      monitor.baseScale = slot.scale;
-      monitor.baseY = MONITOR_Y + (slot.lift || 0);
-      monitor.group.position.set(slot.x, monitor.baseY, slot.z);
-      monitor.group.rotation.y = slot.rot;
-      monitor.stand.visible = !slot.mounted;
+  _layoutScreens() {
+    const layout = this._screenLayout();
+    this.liveScreens.forEach((screen, i) => {
+      const slot = layout[i] || layout[layout.length - 1];
+      screen.slot = slot;
+      screen.group.position.set(slot.x, slot.y, slot.z);
+      screen.group.rotation.y = slot.rot;
+      screen.group.scale.setScalar(slot.scale);
+      screen.group.visible = !slot.hidden;
+      screen.stand.visible = !slot.mounted;
+      screen.pool.visible = !slot.mounted;
+      screen.pool.position.set(slot.x, 1.012, slot.z + 0.5);
+      screen.pool.scale.setScalar(slot.scale);
     });
   }
 
-  _buildMonitors() {
-    this.projects.slice(0, MAX_MONITORS).forEach((project, i) => {
-      const monitor = this._createMonitor(project, i);
-      this.scene.add(monitor);
+  _buildScreens() {
+    const accents = { terminal: '#6366f1', editor: '#a855f7', dash: '#06b6d4' };
+    this._seedLog();
+    this._screenLayout().forEach((slot, i) => {
+      this.liveScreens.push(this._createScreen(slot.key, accents[slot.key], i));
     });
-    this._applyLayout();
+    this._layoutScreens();
+    if (this.reduced) {
+      this.codeReveal = EDITOR_CODE.length + 26;
+      this._redrawScreens();
+    }
   }
 
-  _createMonitor(project, index) {
+  _createScreen(key, accentHex, index) {
     const group = new THREE.Group();
-    group.position.set(0, 2.45, -0.3);
 
-    const accent = new THREE.Color(project.color);
+    const accent = new THREE.Color(accentHex);
     const W = 3.2;
     const H = 1.9;
     const D = 0.12;
@@ -506,85 +549,17 @@ export class CyberpunkWorkspace {
     const frame = new THREE.Mesh(new THREE.BoxGeometry(W + 0.16, H + 0.16, D), frameMat);
     group.add(frame);
 
-    const screen = this._screenMesh(project);
+    const surface = this._createScreenSurface(key, accentHex);
+    const mat = new THREE.MeshBasicMaterial({
+      map: surface.texture,
+      toneMapped: false,
+      transparent: true,
+      opacity: 0,
+    });
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
     screen.position.z = D / 2 + 0.004;
+    screen.scale.y = 0.004;
     group.add(screen);
-
-    const halo = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: this._radialTexture(),
-        color: accent,
-        transparent: true,
-        opacity: 0.32,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-    );
-    halo.scale.set(W * 1.9, H * 1.9, 1);
-    halo.position.z = -0.35;
-    group.add(halo);
-
-    const glow = new THREE.PointLight(accent, 5.5, 4.2, 2);
-    glow.visible = this.quality !== 'low';
-    glow.position.set(0, 0, 0.75);
-    group.add(glow);
-
-    const strip = new THREE.Mesh(
-      new THREE.BoxGeometry(W * 0.66, 0.025, 0.05),
-      new THREE.MeshBasicMaterial({ color: accent, toneMapped: false })
-    );
-    strip.position.set(0, -(H / 2 + 0.16), 0.02);
-    group.add(strip);
-
-    const standMat = new THREE.MeshStandardMaterial({ color: 0x10151f, roughness: 0.45, metalness: 0.8 });
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.48, 12), standMat);
-    neck.position.y = -(H / 2 + 0.26);
-    const stand = new THREE.Group();
-    stand.add(neck);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.05, 24), standMat);
-    base.position.y = -(H / 2 + 0.5);
-    stand.add(base);
-    group.add(stand);
-
-    const hitbox = new THREE.Mesh(
-      new THREE.PlaneGeometry(W + 0.5, H + 0.9),
-      new THREE.MeshBasicMaterial({ visible: false })
-    );
-    hitbox.position.z = 0.05;
-    group.add(hitbox);
-    hitbox.userData.project = project;
-    this.interactives.push(hitbox);
-
-    const monitor = {
-      group,
-      frame,
-      screen,
-      halo,
-      glow,
-      strip,
-      stand,
-      project,
-      slot: null,
-      index,
-      baseScale: 1,
-      hover: 0,
-      boot: 0,
-      bootDelay: index * 0.12,
-      baseY: MONITOR_Y,
-    };
-    monitor.userData = { slug: project.slug };
-    group.userData = { slug: project.slug };
-    this.monitors.push(monitor);
-    return group;
-  }
-
-  _screenMesh(project) {
-    const W = 3.2;
-    const H = 1.9;
-    const surface = this._createScreenSurface(project);
-    const mat = new THREE.MeshBasicMaterial({ map: surface.texture, toneMapped: false, transparent: true, opacity: 0 });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
-    mesh.scale.y = 0.004;
 
     const scanMat = new THREE.ShaderMaterial({
       transparent: true,
@@ -592,7 +567,7 @@ export class CyberpunkWorkspace {
       blending: THREE.AdditiveBlending,
       uniforms: {
         uTime: { value: 0 },
-        uColor: { value: new THREE.Color(project.color) },
+        uColor: { value: accent },
         uOpacity: { value: 0 },
       },
       vertexShader: `
@@ -614,128 +589,445 @@ export class CyberpunkWorkspace {
     });
     const scan = new THREE.Mesh(new THREE.PlaneGeometry(W, H), scanMat);
     scan.position.z = 0.006;
-    mesh.add(scan);
+    screen.add(scan);
 
-    this.screenSurfaces.push({ project, surface, material: mat, scanMat, mesh });
-    return mesh;
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: this._radialTexture(),
+        color: accent,
+        transparent: true,
+        opacity: 0.32,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    halo.scale.set(W * 1.9, H * 1.9, 1);
+    halo.position.z = -0.35;
+    group.add(halo);
+
+    const pool = new THREE.Mesh(
+      new THREE.PlaneGeometry(W * 1.25, H * 1.35),
+      new THREE.MeshBasicMaterial({
+        map: this._radialTexture(),
+        color: accent,
+        transparent: true,
+        opacity: 0.24,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      })
+    );
+    pool.rotation.x = -Math.PI / 2;
+    this.scene.add(pool);
+
+    const strip = new THREE.Mesh(
+      new THREE.BoxGeometry(W * 0.66, 0.025, 0.05),
+      new THREE.MeshBasicMaterial({ color: accent, toneMapped: false })
+    );
+    strip.position.set(0, -(H / 2 + 0.16), 0.02);
+    group.add(strip);
+
+    const standMat = new THREE.MeshStandardMaterial({ color: 0x10151f, roughness: 0.45, metalness: 0.8 });
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.48, 12), standMat);
+    neck.position.y = -(H / 2 + 0.26);
+    const stand = new THREE.Group();
+    stand.add(neck);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.05, 24), standMat);
+    base.position.y = -(H / 2 + 0.5);
+    stand.add(base);
+    group.add(stand);
+
+    this.scene.add(group);
+
+    return {
+      key,
+      accent,
+      accentHex,
+      group,
+      frame,
+      screen,
+      scanMat,
+      halo,
+      pool,
+      strip,
+      stand,
+      surface,
+      slot: null,
+      boot: 0,
+      bootDelay: index * 0.18,
+    };
   }
 
-  _createScreenSurface(project) {
+  _createScreenSurface(key, accentHex) {
     const w = 1024;
     const h = 608;
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    this._drawScreen(ctx, w, h, project);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    return { canvas, ctx, texture, w, h };
+
+    const surface = { key, accentHex, canvas, ctx, texture, w, h };
+    this._drawSurface(surface);
+    return surface;
   }
 
-  _drawScreen(ctx, w, h, project) {
-    const accent = project.color;
-    const title = (project.title && (project.title[this.lang] || project.title.en)) || project.slug;
-    const subtitle = (project.subtitle && (project.subtitle[this.lang] || project.subtitle.en)) || '';
-    const tags = project.tags || [];
+  _drawSurface(surface) {
+    const { ctx, w, h } = surface;
+    if (surface.key === 'terminal') this._drawTerminal(ctx, w, h, surface.accentHex);
+    else if (surface.key === 'editor') this._drawEditor(ctx, w, h, surface.accentHex);
+    else this._drawDash(ctx, w, h, surface.accentHex);
+    surface.texture.needsUpdate = true;
+  }
 
+  _screenChrome(ctx, w, h, accentHex, url) {
     const bg = ctx.createLinearGradient(0, 0, w, h);
-    bg.addColorStop(0, '#0a0f1e');
-    bg.addColorStop(0.55, '#080b14');
-    bg.addColorStop(1, mixHex(accent, '#080b14', 0.82));
+    bg.addColorStop(0, '#0b1122');
+    bg.addColorStop(0.55, '#070a12');
+    bg.addColorStop(1, '#0a0d18');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.028)';
+    ctx.strokeStyle = 'rgba(99,102,241,0.05)';
     ctx.lineWidth = 1;
-    for (let x = 0; x < w; x += 48) {
+    for (let x = 0; x <= w; x += 48) {
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, h);
       ctx.stroke();
     }
-    for (let y = 0; y < h; y += 48) {
+    for (let y = 0; y <= h; y += 48) {
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(w, y + 0.5);
       ctx.stroke();
     }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.035)';
+    const top = ctx.createLinearGradient(0, 0, 0, 58);
+    top.addColorStop(0, 'rgba(15,20,36,0.98)');
+    top.addColorStop(1, 'rgba(10,13,24,0.9)');
+    ctx.fillStyle = top;
     ctx.fillRect(0, 0, w, 58);
-    ctx.fillStyle = hexToRgba(accent, 0.9);
-    ctx.beginPath();
-    ctx.arc(34, 29, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.beginPath();
-    ctx.arc(58, 29, 7, 0, Math.PI * 2);
-    ctx.arc(82, 29, 7, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = 'rgba(148,163,184,0.14)';
+    ctx.fillRect(0, 57, w, 1);
 
-    ctx.font = '500 17px "JetBrains Mono", monospace';
-    ctx.fillStyle = 'rgba(226,232,240,0.45)';
-    ctx.fillText(`jordan.dev/portfolio/${project.slug}`, 110, 35);
-
-    ctx.fillStyle = accent;
-    ctx.fillRect(0, 58, 4, h - 58);
-
-    ctx.font = '600 17px "JetBrains Mono", monospace';
-    ctx.fillStyle = hexToRgba(accent, 0.85);
-    ctx.fillText('// case study', 60, 126);
-
-    ctx.fillStyle = '#f1f5ff';
-    ctx.font = '700 62px "Space Grotesk", sans-serif';
-    ctx.fillText(title, 60, 200, w - 120);
-
-    ctx.fillStyle = 'rgba(148,163,184,0.9)';
-    ctx.font = '400 24px "Space Grotesk", sans-serif';
-    ctx.fillText(subtitle, 60, 244, w - 120);
-
-    let px = 60;
-    const py = 292;
-    ctx.font = '600 15px "JetBrains Mono", monospace';
-    tags.slice(0, 4).forEach((tag) => {
-      const tw = ctx.measureText(tag).width;
-      const boxW = tw + 28;
-      ctx.fillStyle = hexToRgba(accent, 0.12);
-      ctx.strokeStyle = hexToRgba(accent, 0.35);
-      ctx.lineWidth = 1;
-      this._rr(ctx, px, py, boxW, 34, 8);
+    const dots = ['#f87171', '#fbbf24', '#34d399'];
+    dots.forEach((color, i) => {
+      ctx.beginPath();
+      ctx.arc(30 + i * 20, 29, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
       ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = hexToRgba(accent, 0.95);
-      ctx.fillText(tag, px + 14, py + 22);
-      px += boxW + 10;
     });
 
-    const codeX = 60;
-    const codeY = 372;
-    const rows = 7;
-    ctx.font = '500 16px "JetBrains Mono", monospace';
-    for (let i = 0; i < rows; i++) {
-      const y = codeY + i * 30;
-      ctx.fillStyle = 'rgba(99,102,241,0.18)';
-      ctx.fillText(String(i + 1).padStart(2, '0'), codeX, y);
-      const indent = (i % 3) * 24 + 42;
-      const len = 140 + ((i * 97) % 420);
-      ctx.fillStyle = i % 4 === 1 ? hexToRgba(accent, 0.75) : 'rgba(148,163,184,0.22)';
-      ctx.fillRect(codeX + indent, y - 12, len, 9);
-      if (i % 3 === 0) {
-        ctx.fillStyle = 'rgba(6,182,212,0.5)';
-        ctx.fillRect(codeX + indent + len + 12, y - 12, 58, 9);
-      }
+    ctx.font = '500 17px "JetBrains Mono", ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(148,163,184,0.6)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(url, 104, 30);
+
+    ctx.fillStyle = accentHex;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(w - 118, 23, 8, 12);
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(148,163,184,0.45)';
+    ctx.font = '500 15px "JetBrains Mono", ui-monospace, monospace';
+    ctx.fillText('LIVE', w - 30, 30);
+    ctx.textAlign = 'left';
+  }
+
+  _seedLog() {
+    this.logLines.length = 0;
+    AGENT_LOG.slice(0, 6).forEach(([agent, msg, color], i) => {
+      this.logLines.push({ agent, msg, color, t: clockString(i * 3) });
+    });
+    this.logIndex = 6;
+    this.logTimer = 1.1;
+  }
+
+  _drawTerminal(ctx, w, h, accent) {
+    this._screenChrome(ctx, w, h, accent, 'jordan.dev — agent-runner');
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '700 21px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#eef2ff';
+    ctx.fillText('AUTONOMOUS FACTORY', 60, 108);
+
+    ctx.font = '500 15px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(148,163,184,0.55)';
+    ctx.fillText('multi-agent orchestration · run #1842', 60, 134);
+
+    const pulse = 0.55 + 0.45 * Math.sin(this.simTime * 2.4);
+    ctx.fillStyle = hexToRgba(accent, 0.14);
+    this._rr(ctx, w - 208, 92, 148, 34, 17);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(w - 184, 109, 5, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba('#34d399', pulse);
+    ctx.fill();
+    ctx.font = '600 14px "JetBrains Mono", monospace';
+    ctx.fillStyle = hexToRgba('#34d399', 0.9);
+    ctx.fillText('LIVE', w - 170, 114);
+
+    ctx.fillStyle = 'rgba(148,163,184,0.12)';
+    ctx.fillRect(60, 156, w - 120, 1);
+
+    const lineH = 44;
+    const startY = 194;
+    const maxLines = 8;
+    const lines = this.logLines.slice(-maxLines);
+
+    ctx.font = '500 18px "JetBrains Mono", monospace';
+    lines.forEach((line, i) => {
+      const y = startY + i * lineH;
+      const fresh = i === lines.length - 1;
+
+      ctx.fillStyle = 'rgba(148,163,184,0.32)';
+      ctx.fillText(line.t, 60, y, 86);
+
+      ctx.fillStyle = fresh ? hexToRgba(AGENT_COLORS[line.agent] || accent, 1) : hexToRgba(AGENT_COLORS[line.agent] || accent, 0.7);
+      ctx.fillText(line.agent.padEnd(12, ' '), 152, y, 140);
+
+      ctx.fillStyle = line.color;
+      ctx.globalAlpha = fresh ? 1 : 0.62;
+      ctx.fillText(line.msg, 302, y, w - 372);
+      ctx.globalAlpha = 1;
+    });
+
+    const last = lines[lines.length - 1];
+    if (last && this.simTime % 1 < 0.55) {
+      ctx.font = '500 18px "JetBrains Mono", monospace';
+      const cursorX = 302 + Math.min(ctx.measureText(last.msg).width, w - 372);
+      ctx.fillStyle = hexToRgba(accent, 0.9);
+      ctx.fillRect(cursorX + 4, startY + (lines.length - 1) * lineH - 15, 11, 19);
     }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    ctx.fillRect(0, h - 52, w, 1);
+    ctx.fillStyle = 'rgba(148,163,184,0.12)';
+    ctx.fillRect(60, h - 58, w - 120, 1);
     ctx.font = '500 14px "JetBrains Mono", monospace';
-    ctx.fillStyle = 'rgba(226,232,240,0.35)';
-    ctx.fillText('© 2026 jjordan', 60, h - 22);
-    ctx.fillStyle = hexToRgba(accent, 0.9);
-    ctx.fillText('OPEN PROJECT  ↗', w - 250, h - 22);
+    ctx.fillStyle = 'rgba(148,163,184,0.5)';
+    ctx.fillText('4 agents · 128k tokens · 0 errors', 60, h - 26);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = hexToRgba(accent, 0.75);
+    ctx.fillText('factory run --watch', w - 60, h - 26);
+    ctx.textAlign = 'left';
+  }
+
+  _codeTokens(line) {
+    const out = [];
+    if (!line) return [{ text: ' ', color: '#cbd5e1' }];
+    const re = /(\/\/.*$)|('[^']*')|\b(import|from|export|async|function|const|await|for|of|if|return|new)\b|([A-Za-z_$][\w$]*)(?=\()|(\d+)|(\s+)|([^\w\s])/g;
+    let match;
+    let last = 0;
+    while ((match = re.exec(line))) {
+      if (match.index > last) out.push({ text: line.slice(last, match.index), color: '#cbd5e1' });
+      let color = '#cbd5e1';
+      if (match[1]) color = '#4b5876';
+      else if (match[2]) color = '#67e8f9';
+      else if (match[3]) color = '#a5b4fc';
+      else if (match[4]) color = '#d8b4fe';
+      else if (match[5]) color = '#fbcfe8';
+      else if (match[6]) color = '#cbd5e1';
+      else if (match[7]) color = '#94a3b8';
+      out.push({ text: match[0], color });
+      last = re.lastIndex;
+    }
+    if (last < line.length) out.push({ text: line.slice(last), color: '#cbd5e1' });
+    return out;
+  }
+
+  _drawCodeLine(ctx, line, x, y, budget) {
+    const tokens = this._codeTokens(line);
+    let used = 0;
+    let cx = x;
+    for (const tok of tokens) {
+      if (used >= budget) break;
+      const room = budget - used;
+      const shown = tok.text.length <= room ? tok.text : tok.text.slice(0, room);
+      ctx.fillStyle = tok.color;
+      ctx.fillText(shown, cx, y);
+      cx += ctx.measureText(shown).width;
+      used += shown.length;
+      if (shown.length < tok.text.length) break;
+    }
+    return cx;
+  }
+
+  _drawEditor(ctx, w, h, accent) {
+    this._screenChrome(ctx, w, h, accent, 'factory-harness · src/api/route.ts');
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.font = '600 15px "JetBrains Mono", monospace';
+    const badgeW = ctx.measureText('TS').width + 26;
+    ctx.fillStyle = hexToRgba(accent, 0.16);
+    this._rr(ctx, 60, 78, badgeW, 28, 6);
+    ctx.fill();
+    ctx.fillStyle = hexToRgba(accent, 0.95);
+    ctx.fillText('TS', 73, 98);
+
+    ctx.font = '500 16px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(203,213,225,0.6)';
+    ctx.fillText('src / api / route.ts', 60 + badgeW + 16, 98);
+
+    ctx.fillStyle = 'rgba(148,163,184,0.12)';
+    ctx.fillRect(60, 128, w - 120, 1);
+
+    const cursorOn = this.simTime % 1 < 0.55;
+    ctx.textAlign = 'right';
+    ctx.font = '500 14px "JetBrains Mono", monospace';
+    ctx.fillStyle = hexToRgba(accent, 0.6);
+    ctx.fillText('coder · generating', w - 60, 98);
+    ctx.textAlign = 'left';
+
+    const lines = EDITOR_CODE.split('\n');
+    const lineH = 30;
+    const startY = 170;
+    const codeX = 108;
+    let remaining = Math.floor(this.codeReveal);
+
+    ctx.font = '500 18px "JetBrains Mono", monospace';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const y = startY + i * lineH;
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(99,102,241,0.3)';
+      ctx.fillText(String(i + 1).padStart(2, '0'), 74, y);
+      ctx.textAlign = 'left';
+
+      if (remaining <= 0) break;
+
+      const budget = Math.min(remaining, line.length);
+      const active = remaining <= line.length + 1;
+      if (active) {
+        ctx.fillStyle = 'rgba(168,85,247,0.06)';
+        ctx.fillRect(88, y - 20, w - 148, 27);
+      }
+
+      const endX = this._drawCodeLine(ctx, line, codeX, y, budget);
+
+      if (active && cursorOn) {
+        ctx.fillStyle = hexToRgba(accent, 0.85);
+        ctx.fillRect(endX + 2, y - 15, 10, 19);
+      }
+
+      remaining -= line.length + 1;
+    }
+
+    let cursorLine = 1;
+    let cursorCol = 1;
+    let left = Math.floor(this.codeReveal);
+    for (const ch of EDITOR_CODE) {
+      if (left <= 0) break;
+      if (ch === '\n') {
+        cursorLine += 1;
+        cursorCol = 1;
+      } else {
+        cursorCol += 1;
+      }
+      left -= 1;
+    }
+
+    ctx.fillStyle = 'rgba(148,163,184,0.12)';
+    ctx.fillRect(60, h - 58, w - 120, 1);
+    ctx.font = '500 14px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(148,163,184,0.5)';
+    ctx.fillText(`Ln ${cursorLine}, Col ${cursorCol} · UTF-8 · TypeScript`, 60, h - 26);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = hexToRgba(accent, 0.75);
+    ctx.fillText('agent · coder', w - 60, h - 26);
+    ctx.textAlign = 'left';
+  }
+
+  _drawDash(ctx, w, h, accent) {
+    this._screenChrome(ctx, w, h, accent, 'orchestration — agent mesh');
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '700 23px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#eef2ff';
+    ctx.fillText('AGENT MESH', 60, 110);
+
+    const pulse = 0.5 + 0.5 * Math.sin(this.simTime * 3);
+    ctx.beginPath();
+    ctx.arc(w - 186, 103, 5, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba('#34d399', pulse);
+    ctx.fill();
+    ctx.font = '600 14px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(52,211,153,0.85)';
+    ctx.fillText('RUNNING', w - 172, 108);
+
+    ctx.fillStyle = 'rgba(148,163,184,0.12)';
+    ctx.fillRect(60, 138, w - 120, 1);
+
+    const rowStart = 184;
+    const rowH = 74;
+
+    AGENTS.forEach((agent, i) => {
+      const y = rowStart + i * rowH;
+      const progress = 0.25 + 0.7 * (0.5 + 0.5 * Math.sin(this.simTime * agent.speed + agent.phase));
+      const color = AGENT_COLORS[agent.name] || accent;
+
+      ctx.beginPath();
+      ctx.arc(66, y - 5, 6, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(color, 0.9);
+      ctx.fill();
+
+      ctx.textAlign = 'left';
+      ctx.font = '600 20px "JetBrains Mono", monospace';
+      ctx.fillStyle = hexToRgba(color, 0.95);
+      ctx.fillText(agent.name, 88, y);
+
+      ctx.font = '400 16px "JetBrains Mono", monospace';
+      ctx.fillStyle = 'rgba(148,163,184,0.55)';
+      ctx.fillText(agent.task, 88, y + 27);
+
+      const trackX = 560;
+      const trackW = 330;
+      ctx.fillStyle = 'rgba(148,163,184,0.12)';
+      this._rr(ctx, trackX, y - 12, trackW, 9, 4);
+      ctx.fill();
+      ctx.fillStyle = hexToRgba(color, 0.85);
+      this._rr(ctx, trackX, y - 12, Math.max(10, trackW * progress), 9, 4);
+      ctx.fill();
+
+      ctx.textAlign = 'right';
+      ctx.font = '500 15px "JetBrains Mono", monospace';
+      ctx.fillStyle = hexToRgba(color, 0.7);
+      ctx.fillText(`${Math.round(progress * 100)}%`, w - 62, y - 2);
+      ctx.textAlign = 'left';
+    });
+
+    ctx.fillStyle = 'rgba(148,163,184,0.12)';
+    ctx.fillRect(60, h - 96, w - 120, 1);
+
+    const stats = [
+      ['TASKS', String(128 + Math.floor(this.simTime / 14))],
+      ['SUCCESS', '98.7%'],
+      ['AVG TIME', '2m 41s'],
+    ];
+    stats.forEach(([label, value], i) => {
+      const x = 60 + i * 214;
+      ctx.font = '500 13px "JetBrains Mono", monospace';
+      ctx.fillStyle = 'rgba(148,163,184,0.42)';
+      ctx.fillText(label, x, h - 62);
+      ctx.font = '700 26px "Space Grotesk", sans-serif';
+      ctx.fillStyle = i === 2 ? hexToRgba(accent, 0.95) : '#e2e8f0';
+      ctx.fillText(value, x, h - 28);
+    });
+
+    ctx.textAlign = 'right';
+    ctx.font = '500 13px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(148,163,184,0.4)';
+    ctx.fillText('synced just now', w - 60, h - 28);
+    ctx.textAlign = 'left';
   }
 
   _keyboardTexture() {
@@ -856,7 +1148,7 @@ export class CyberpunkWorkspace {
   }
 
   async _setupPost() {
-    if (this.quality !== 'high' || this.reduced) return;
+    if (this.quality === 'low' || this.reduced) return;
     try {
       const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }] = await Promise.all([
         import('three/addons/postprocessing/EffectComposer.js'),
@@ -885,7 +1177,8 @@ export class CyberpunkWorkspace {
       const wasPortrait = this.portrait;
       this.camera.aspect = w / h;
       this._updateFraming();
-      if (this.portrait !== wasPortrait) this._applyLayout();
+      if (this.portrait !== wasPortrait) this._layoutScreens();
+      this.renderer.setPixelRatio(this._pixelRatio());
       this.renderer.setSize(w, h);
       if (this.composer) this.composer.setSize(w, h);
     };
@@ -894,16 +1187,11 @@ export class CyberpunkWorkspace {
     this.onPointerMove = (e) => {
       this.pointerTarget.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.pointerTarget.y = (e.clientY / window.innerHeight) * 2 - 1;
-      this.clientX = e.clientX;
-      this.clientY = e.clientY;
     };
     window.addEventListener('pointermove', this.onPointerMove, { passive: true });
 
-    this.raycaster = new THREE.Raycaster();
-    this._pointerNdc = new THREE.Vector2();
-
     this.onCanvasClick = () => {
-      if (this.hovered) this.onSelect(this.hovered.project);
+      if (this.scrollProgress < 0.02) this.onWorkspaceClick();
     };
     this.canvas.addEventListener('click', this.onCanvasClick);
 
@@ -912,77 +1200,97 @@ export class CyberpunkWorkspace {
       document.body.classList.add('ws-lost');
     };
     this.canvas.addEventListener('webglcontextlost', this.onContextLost);
-
-    this.onPointerLeave = () => this._clearHover();
-    document.addEventListener('pointerleave', this.onPointerLeave);
   }
 
   setScroll(progress) {
     this.scrollProgress = clamp(progress, 0, 1);
-    if (this.scrollProgress > 0.02) {
-      this._clearHover();
+  }
+
+  setPaused(paused) {
+    if (this.paused === paused || this.disposed) return;
+    this.paused = paused;
+    if (paused) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    } else {
+      this.clock.getDelta();
+      this._animate();
     }
   }
 
-  _clearHover() {
-    if (!this.hovered && this.canvas.style.cursor !== 'pointer') return;
-    this.hovered = null;
-    this.canvas.style.cursor = 'default';
-    this.onHover(null);
+  _sampleQuality(rawDt) {
+    if (this.reduced || rawDt <= 0 || rawDt > 0.25) return;
+    if (performance.now() - this.startedAt < 4000) return;
+    this.frameAvg += (rawDt - this.frameAvg) * 0.05;
+    if (this.frameAvg > 0.028) this.slowFrames += 1;
+    else this.slowFrames = Math.max(0, this.slowFrames - 2);
+
+    if (this.slowFrames > 60 && this.quality !== 'low') this._downgrade();
+  }
+
+  _downgrade() {
+    this.slowFrames = 0;
+    this.frameAvg = 1 / 60;
+    if (this.quality === 'high') {
+      this.quality = 'medium';
+    } else {
+      this.quality = 'low';
+      if (this.composer) {
+        const composer = this.composer;
+        this.composer = null;
+        this.bloom = null;
+        if (composer.renderTarget1) composer.renderTarget1.dispose();
+        if (composer.renderTarget2) composer.renderTarget2.dispose();
+      }
+      if (this.particles) this.particles.visible = false;
+      this.scene.environment = null;
+      this.renderer.autoClear = true;
+    }
+    this.renderer.setPixelRatio(this._pixelRatio());
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (this.composer) this.composer.setSize(window.innerWidth, window.innerHeight);
   }
 
   setLanguage(lang) {
     if (lang === this.lang) return;
     this.lang = lang;
-    this.screenSurfaces.forEach((s) => {
-      this._drawScreen(s.surface.ctx, s.surface.w, s.surface.h, s.project);
-      s.surface.texture.needsUpdate = true;
-    });
+    this.refreshFonts();
   }
 
   refreshFonts() {
-    this.screenSurfaces.forEach((s) => {
-      this._drawScreen(s.surface.ctx, s.surface.w, s.surface.h, s.project);
-      s.surface.texture.needsUpdate = true;
+    this._redrawScreens();
+  }
+
+  _redrawScreens() {
+    this.liveScreens.forEach((screen) => {
+      if (screen.group.visible) this._drawSurface(screen.surface);
     });
   }
 
-  focusProject(slug) {
-    const monitor = this.monitors.find((m) => m.project.slug === slug);
-    if (!monitor) return;
-    const world = new THREE.Vector3();
-    monitor.group.getWorldPosition(world);
-    const dir = new THREE.Vector3().subVectors(world, this.camera.position).normalize();
-    this.focus = {
-      position: world.clone().addScaledVector(dir, -2.35).add(new THREE.Vector3(0, 0.18, 0)),
-      look: world.clone(),
-      t: 0,
-    };
-  }
+  _updateSim(dt) {
+    this.simTime += dt;
 
-  _updateHover() {
-    if (!this.raycaster || this.clientX == null) return;
-    if (this.scrollProgress > 0.02) {
-      this._clearHover();
-      return;
-    }
-    this.raycaster.setFromCamera(this._pointerNdc, this.camera);
-    const hits = this.raycaster.intersectObjects(this.interactives, false);
-    const next = hits.length ? hits[0].object.userData.project : null;
-    const changed = (next && next.slug) !== (this.hovered && this.hovered.project.slug);
-
-    if (next) {
-      if (!this.hovered || this.hovered.project.slug !== next.slug) {
-        this.hovered = this.monitors.find((m) => m.project.slug === next.slug) || null;
+    this.logTimer -= dt;
+    if (this.logTimer <= 0) {
+      if (this.logIndex >= AGENT_LOG.length) {
+        this.logLines.length = 0;
+        this.logIndex = 0;
+        this.logTimer = 1.5;
+      } else {
+        const [agent, msg, color] = AGENT_LOG[this.logIndex++];
+        this.logLines.push({ agent, msg, color, t: clockString(this.simTime) });
+        if (this.logLines.length > 8) this.logLines.shift();
+        this.logTimer = 0.85 + (this.logIndex % 3) * 0.22;
       }
-    } else {
-      this.hovered = null;
     }
 
-    this.canvas.style.cursor = next ? 'pointer' : 'default';
-
-    if (changed) {
-      this.onHover(next, this.clientX, this.clientY);
+    const total = EDITOR_CODE.length;
+    if (this.codeHold > 0) {
+      this.codeHold -= dt;
+      if (this.codeHold <= 0) this.codeReveal = 150;
+    } else {
+      this.codeReveal = Math.min(this.codeReveal + dt * 55, total + 26);
+      if (this.codeReveal >= total + 26) this.codeHold = 2.8;
     }
   }
 
@@ -990,32 +1298,23 @@ export class CyberpunkWorkspace {
     if (this.disposed) return;
     this.raf = requestAnimationFrame(() => this._animate());
 
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const rawDt = this.clock.getDelta();
+    const dt = Math.min(rawDt, 0.05);
     this.elapsed += dt;
     const t = this.elapsed;
+    this._sampleQuality(rawDt);
 
     this.pointer.x += (this.pointerTarget.x - this.pointer.x) * (1 - Math.exp(-dt * 5));
     this.pointer.y += (this.pointerTarget.y - this.pointer.y) * (1 - Math.exp(-dt * 5));
-    this._pointerNdc.set(this.pointerTarget.x, -this.pointerTarget.y);
-    this._updateHover();
 
     const p = this.scrollProgress;
     const idle = this.reduced ? 0 : 1;
 
-    let targetX = this.pointer.x * 0.55 * idle;
-    let targetY = this.baseCam.y + p * 2.6 + this.pointer.y * -0.22 * idle;
-    let targetZ = this.baseCam.z + p * 2.2;
+    const targetX = this.pointer.x * 0.55 * idle;
+    const targetY = this.baseCam.y + p * 2.6 + this.pointer.y * -0.22 * idle;
+    const targetZ = this.baseCam.z + p * 2.2;
 
-    if (this.focus) {
-      this.focus.t += dt * 1.6;
-      const k = easeOut(clamp(this.focus.t, 0, 1));
-      targetX = THREE.MathUtils.lerp(targetX, this.focus.position.x, k);
-      targetY = THREE.MathUtils.lerp(targetY, this.focus.position.y, k);
-      targetZ = THREE.MathUtils.lerp(targetZ, this.focus.position.z, k);
-      this.lookTarget.lerp(this.focus.look, k * 0.5);
-    } else {
-      this.lookTarget.set(targetX * 0.25, this.baseLook.y - p * 0.55, this.baseLook.z);
-    }
+    this.lookTarget.set(targetX * 0.25, this.baseLook.y - p * 0.55, this.baseLook.z);
 
     const damp = 1 - Math.exp(-dt * 4.5);
     this.camera.position.x += (targetX - this.camera.position.x) * damp;
@@ -1025,29 +1324,30 @@ export class CyberpunkWorkspace {
     this.lookCurrent.lerp(this.lookTarget, 1 - Math.exp(-dt * 4));
     this.camera.lookAt(this.lookCurrent);
 
-    this.monitors.forEach((m) => {
-      if (m.boot < 1) {
-        if (t > m.bootDelay) m.boot = clamp(m.boot + dt * 1.7, 0, 1);
-        const boot = easeOut(m.boot);
-        m.screen.material.opacity = boot;
-        m.screen.scale.y = 0.004 + boot * 0.996;
-        const scanBoot = m.screen.children[0];
-        if (scanBoot) scanBoot.material.uniforms.uOpacity.value = boot;
+    if (!this.reduced) {
+      this._updateSim(dt);
+      this.screenAcc += dt;
+      if (this.screenAcc >= (this.quality === 'low' ? 0.16 : 0.1)) {
+        this.screenAcc = 0;
+        this._redrawScreens();
+      }
+    }
+
+    this.liveScreens.forEach((screen, i) => {
+      if (screen.boot < 1) {
+        if (t > screen.bootDelay) screen.boot = clamp(screen.boot + dt * 1.7, 0, 1);
+        const boot = easeOut(screen.boot);
+        screen.screen.material.opacity = boot;
+        screen.screen.scale.y = 0.004 + boot * 0.996;
+        screen.scanMat.uniforms.uOpacity.value = boot;
       }
 
-      const boot = easeOut(m.boot);
-      const isHover = this.hovered === m;
-
-      m.hover += ((isHover ? 1 : 0) - m.hover) * (1 - Math.exp(-dt * 9));
-      m.group.scale.setScalar(m.baseScale * (1 + m.hover * 0.035));
-      m.frame.material.emissiveIntensity = 0.06 + m.hover * 0.4;
-      m.halo.material.opacity = (0.32 + m.hover * 0.22) * boot;
-      m.glow.intensity = (5.5 + m.hover * 6) * boot;
-      m.screen.material.color.setScalar(1 + m.hover * 0.35);
-      m.group.position.y = m.baseY + Math.sin(t * 0.9 + m.index * 1.7) * 0.015 * idle;
-
-      const scan = m.screen.children[0];
-      if (scan) scan.material.uniforms.uTime.value = t;
+      const boot = easeOut(screen.boot);
+      screen.frame.material.emissiveIntensity = 0.06 + 0.08 * Math.sin(t * 0.7 + i);
+      screen.halo.material.opacity = 0.32 * boot;
+      screen.pool.material.opacity = 0.24 * boot;
+      screen.group.position.y = screen.slot.y + Math.sin(t * 0.9 + i * 1.7) * 0.012 * idle;
+      screen.scanMat.uniforms.uTime.value = t;
     });
 
     if (this.particles) {
@@ -1070,7 +1370,6 @@ export class CyberpunkWorkspace {
     window.removeEventListener('pointermove', this.onPointerMove);
     this.canvas.removeEventListener('click', this.onCanvasClick);
     this.canvas.removeEventListener('webglcontextlost', this.onContextLost);
-    document.removeEventListener('pointerleave', this.onPointerLeave);
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {
