@@ -29,7 +29,7 @@
           <a class="nav-link" href="#projects">${i18n[lang].nav_projects}</a>
           <a class="nav-link" href="#about">${i18n[lang].nav_about}</a>
           <a class="nav-link" href="#contact">${i18n[lang].nav_contact}</a>
-          <a class="nav-link" href="https://github.com/jjordan" target="_blank" rel="noopener">GitHub</a>
+          <a class="nav-link" href="https://github.com/pochojordan" target="_blank" rel="noopener">GitHub</a>
           <div class="lang-toggle" id="langToggle">
             <button class="lang-btn${lang === 'es' ? ' active' : ''}" data-lang="es">ES</button>
             <button class="lang-btn${lang === 'en' ? ' active' : ''}" data-lang="en">EN</button>
@@ -40,7 +40,7 @@
         <div class="nl">jjordan<span>.</span></div>
         <div class="nk">
           <a class="nav-link" href="../index.html">${i18n[lang].nav_back}</a>
-          <a class="nav-link" href="https://github.com/jjordan" target="_blank" rel="noopener">GitHub</a>
+          <a class="nav-link" href="https://github.com/pochojordan" target="_blank" rel="noopener">GitHub</a>
         </div>`;
     }
 
