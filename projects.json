@@ -22,5 +22,29 @@
       "en": "Live Pokémon team overlay for Twitch streams. Import from Showdown, 5 border styles, real-time customization via Firebase.",
       "es": "Overlay de equipo Pokémon en vivo para Twitch. Import desde Showdown, 5 estilos de borde, personalización en tiempo real vía Firebase."
     }
+  },
+  {
+    "slug": "2k-team-generate-sync",
+    "color": "#ef4444",
+    "tags": ["2K", "Firebase", "Realtime", "HTML"],
+    "url": "./2k-team-generate-sync/",
+    "title": { "en": "2K Team Sync", "es": "2K Team Sync" },
+    "subtitle": { "en": "Shared starting-five randomizer", "es": "Sorteo de quintetos compartido" },
+    "description": {
+      "en": "Create a room, share the code and draw a random starting five from the group roster in real time.",
+      "es": "Crea una sala, comparte el código y sortea un quinteto aleatorio del roster del grupo en tiempo real."
+    }
+  },
+  {
+    "slug": "detective-solutionary",
+    "color": "#d4af37",
+    "tags": ["Logic", "Puzzle", "Detective", "HTML"],
+    "url": "./detective-solutionary/",
+    "title": { "en": "Logic Grid Pro", "es": "Logic Grid Pro" },
+    "subtitle": { "en": "Detective case solver", "es": "Resolvedor de casos" },
+    "description": {
+      "en": "Generate logic-grid cases with suspects, places and weapons. Track clues, notes and deductions with a timer and exportable case files.",
+      "es": "Genera casos de lógica con sospechosos, lugares y armas. Gestiona pistas, notas y deducciones con cronómetro y expedientes exportables."
+    }
   }
 ]
